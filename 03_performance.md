@@ -171,6 +171,108 @@ Write-Throughパターンを使用して、書き込み時に同時にキャッ�
 キャッシュの無効化戦略を明確にして、古いデータを提供しないようにします。
 キャッシュのウォームアップを実装して、起動時に頻繁にアクセスされるデータをプリロードします。
 
+## キャッシュ戦略と排出ポリシー
+
+### 概要
+
+キャッシュ戦略は、データの書き込み方法と排出ポリシーによって分類されます。
+LRU、LFU、Write-through、Write-back などの戦略を理解し、ユースケースに応じて選択します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "書き込み戦略"
+        WriteThrough[Write-Through<br/>キャッシュとDBに同時書き込み]
+        WriteBack[Write-Back/Write-Behind<br/>キャッシュに書き込み後<br/>非同期でDBに書き込み]
+        WriteAround[Write-Around<br/>DBのみに書き込み<br/>読み取り時にキャッシュ]
+        CacheAside[Cache-Aside/Lazy Loading<br/>読み取り時にキャッシュ<br/>書き込み時はDB直接]
+    end
+
+    subgraph "排出ポリシー"
+        LRU[LRU: Least Recently Used<br/>最も最近使われていない<br/>データを削除]
+        LFU[LFU: Least Frequently Used<br/>最も使用頻度が低い<br/>データを削除]
+        FIFO[FIFO: First In First Out<br/>最も古いデータを削除]
+        TTL[TTL: Time To Live<br/>有効期限切れで削除]
+        Random[Random<br/>ランダムに削除]
+    end
+
+    subgraph "ユースケース"
+        Session[セッションデータ<br/>Write-Through + TTL]
+        Product[商品カタログ<br/>Cache-Aside + LRU]
+        Counter[カウンター<br/>Write-Back + LFU]
+        Config[設定データ<br/>Write-Through + TTL]
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Cache as キャッシュ
+    participant DB as データベース
+
+    Note over App,DB: Write-Through戦略
+
+    App->>Cache: SET user:123 {name: "太郎"}
+    Cache->>Cache: キャッシュに保存
+    Cache->>DB: INSERT/UPDATE users
+    DB-->>Cache: 成功
+    Cache-->>App: 書き込み完了
+
+    Note over App,DB: Write-Back戦略
+
+    App->>Cache: SET counter:page_view 1000
+    Cache->>Cache: キャッシュに保存(dirtyフラグ)
+    Cache-->>App: 即座に書き込み完了
+
+    Note over Cache,DB: バックグラウンド同期(数秒後)
+    Cache->>DB: UPDATE counters SET value=1000
+    DB-->>Cache: 成功
+    Cache->>Cache: dirtyフラグ解除
+
+    Note over App,DB: Cache-Aside戦略(読み取り)
+
+    App->>Cache: GET product:456
+    Cache-->>App: nil(キャッシュミス)
+    App->>DB: SELECT * FROM products WHERE id=456
+    DB-->>App: 商品データ
+    App->>Cache: SET product:456 {data} TTL=300
+
+    Note over App,DB: LRU排出ポリシー
+
+    App->>Cache: SET new_key value
+    Cache->>Cache: メモリ上限到達
+    Cache->>Cache: 最も最近使われていない<br/>キーを特定(access_time順)
+    Cache->>Cache: 古いキーを削除
+    Cache->>Cache: 新しいキーを保存
+```
+
+```mermaid
+graph LR
+    subgraph "LRU vs LFU比較"
+        LRU_List[LRU: アクセス順リスト<br/>A→B→C→D→E<br/>最後にアクセス: A<br/>削除対象: E]
+
+        LFU_List[LFU: 頻度カウント<br/>A:10回, B:5回, C:2回<br/>D:8回, E:1回<br/>削除対象: E]
+    end
+
+    subgraph "Write戦略比較"
+        WT[Write-Through<br/>一貫性: 高<br/>レイテンシ: 高<br/>書き込み負荷: 高]
+
+        WB[Write-Back<br/>一貫性: 結果整合性<br/>レイテンシ: 低<br/>書き込み負荷: 低]
+
+        CA[Cache-Aside<br/>一貫性: 中<br/>レイテンシ: 低<br/>実装複雑度: 低]
+    end
+```
+
+### 設計のポイント
+
+LRUは、最近アクセスされたデータが再度アクセスされる可能性が高い場合に適しています。
+LFUは、アクセス頻度にばらつきがある場合に適していますが、古い人気データが残りやすい問題があります。
+Write-Throughは、データの一貫性が重要な場合に使用しますが、書き込みレイテンシが増加します。
+Write-Backは、書き込み性能が重要な場合に使用しますが、キャッシュ障害時のデータ損失リスクがあります。
+Cache-Asideは、最も一般的なパターンで、実装がシンプルですが、キャッシュミス時のレイテンシが高くなります。
+TTLを適切に設定して、古いデータが残り続けることを防ぎます。
+
 ## CDNによる静的コンテンツのキャッシュ
 
 ### 概要

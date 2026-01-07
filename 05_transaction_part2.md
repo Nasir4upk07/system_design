@@ -223,6 +223,126 @@ GraphQL Gatewayを使用することで、複数のマイクロサービスか�
 BFF(Backend for Frontend)パターンを適用して、クライアントごとに最適化されたAPIを提供します。
 API GatewayとService Meshを組み合わせることで、包括的な制御を実現します。
 
+## Service Meshによるサービス間通信の管理
+
+### 概要
+
+Service Meshは、マイクロサービス間の通信を管理するインフラレイヤーです。
+サイドカープロキシを使用して、トラフィック管理、セキュリティ、オブザーバビリティを提供します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "Service Meshアーキテクチャ"
+        subgraph "Control Plane"
+            Pilot[Pilot<br/>トラフィック管理]
+            Citadel[Citadel<br/>証明書管理]
+            Galley[Galley<br/>設定検証]
+        end
+
+        subgraph "Data Plane"
+            subgraph "Service A Pod"
+                AppA[アプリケーションA]
+                ProxyA[Envoy Proxy<br/>サイドカー]
+                AppA <--> ProxyA
+            end
+
+            subgraph "Service B Pod"
+                AppB[アプリケーションB]
+                ProxyB[Envoy Proxy<br/>サイドカー]
+                AppB <--> ProxyB
+            end
+
+            subgraph "Service C Pod"
+                AppC[アプリケーションC]
+                ProxyC[Envoy Proxy<br/>サイドカー]
+                AppC <--> ProxyC
+            end
+
+            ProxyA <-->|mTLS| ProxyB
+            ProxyB <-->|mTLS| ProxyC
+            ProxyA <-->|mTLS| ProxyC
+        end
+
+        Pilot --> ProxyA
+        Pilot --> ProxyB
+        Pilot --> ProxyC
+        Citadel --> ProxyA
+        Citadel --> ProxyB
+        Citadel --> ProxyC
+    end
+```
+
+```mermaid
+graph LR
+    subgraph "Service Meshの機能"
+        Traffic["トラフィック管理<br/>ルーティング、負荷分散<br/>カナリアリリース<br/>サーキットブレーカー"]
+
+        Security["セキュリティ<br/>mTLS - 相互TLS<br/>認証・認可<br/>証明書自動更新"]
+
+        Observability["オブザーバビリティ<br/>分散トレーシング<br/>メトリクス収集<br/>アクセスログ"]
+
+        Resilience["レジリエンス<br/>リトライ<br/>タイムアウト<br/>フォールト注入"]
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant ProxyA as Envoy - Service A
+    participant AppA as App A
+    participant ProxyB as Envoy - Service B
+    participant AppB as App B
+    participant Pilot as Pilot
+
+    Note over Client,Pilot: サービスディスカバリと設定
+
+    Pilot->>ProxyA: 設定配信 - Service Bのエンドポイント
+    Pilot->>ProxyB: 設定配信 - トラフィックポリシー
+
+    Note over Client,Pilot: リクエスト処理 - mTLS
+
+    Client->>ProxyA: HTTPリクエスト
+    ProxyA->>ProxyA: アクセスログ記録
+    ProxyA->>ProxyA: メトリクス記録開始
+    ProxyA->>AppA: localhost転送
+    AppA->>AppA: ビジネスロジック
+    AppA->>ProxyA: Service Bへリクエスト
+
+    ProxyA->>ProxyA: mTLSハンドシェイク
+    ProxyA->>ProxyB: 暗号化リクエスト - クライアント証明書
+    ProxyB->>ProxyB: 証明書検証
+    ProxyB->>ProxyB: 認可チェック
+    ProxyB->>AppB: localhost転送
+    AppB-->>ProxyB: レスポンス
+    ProxyB-->>ProxyA: 暗号化レスポンス
+    ProxyA-->>AppA: レスポンス
+    AppA-->>ProxyA: 最終レスポンス
+    ProxyA->>ProxyA: メトリクス記録終了 - レイテンシ、ステータス
+    ProxyA-->>Client: レスポンス
+
+    Note over Client,Pilot: カナリアリリース
+
+    Pilot->>ProxyA: トラフィック分割設定 - v1: 90%, v2: 10%
+    Client->>ProxyA: リクエスト
+    ProxyA->>ProxyA: 重み付きルーティング
+    alt 90%の確率
+        ProxyA->>ProxyB: Service B v1へ
+    else 10%の確率
+        ProxyA->>ProxyB: Service B v2へ
+    end
+```
+
+### 設計のポイント
+
+Istio、Linkerd、Consul Connectなどが代表的なService Mesh実装です。
+サイドカープロキシは、アプリケーションコードを変更せずに機能を追加できます。
+mTLSにより、サービス間通信を自動的に暗号化し、ゼロトラストセキュリティを実現します。
+Control Planeは、ポリシーの一元管理と設定の配信を担当します。
+オブザーバビリティ機能により、分散トレーシング(Jaeger、Zipkin)やメトリクス(Prometheus)と連携します。
+カナリアリリースやA/Bテストをインフラレベルで実現できます。
+
 ## コーディネーションサービスを活用した分散システムの管理
 
 ### 概要
@@ -342,6 +462,167 @@ Ephemeralノードを使用することで、クライアントのセッショ�
 Watchメカニズムにより、データ変更を即座に検知できます。
 Quorumベースの動作により、過半数のノードが生存していれば動作し続けます。
 リーダー選出は、シーケンシャルノードの番号で判定し、公平性を保ちます。
+
+## 分散合意アルゴリズム(Paxos, Raft)
+
+### 概要
+
+分散システムにおいて、複数のノード間で一貫した状態を維持するために合意アルゴリズムが必要です。
+Paxos と Raft は代表的な合意アルゴリズムで、ネットワーク分断や障害が発生しても正しく動作します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "Raftの役割"
+        Leader[Leader<br/>クライアントリクエスト処理<br/>ログレプリケーション]
+        Follower1[Follower 1<br/>Leaderからログを受信<br/>投票に参加]
+        Follower2[Follower 2<br/>Leaderからログを受信<br/>投票に参加]
+        Candidate[Candidate<br/>選挙を開始<br/>投票をリクエスト]
+
+        Leader -->|AppendEntries| Follower1
+        Leader -->|AppendEntries| Follower2
+        Leader -.->|タイムアウト| Candidate
+        Candidate -.->|選挙勝利| Leader
+    end
+
+    subgraph "Raftのログレプリケーション"
+        Log1[ログエントリ 1<br/>term: 1, cmd: set x=1]
+        Log2[ログエントリ 2<br/>term: 1, cmd: set y=2]
+        Log3[ログエントリ 3<br/>term: 2, cmd: set x=3]
+        Committed[コミット済み]
+        Uncommitted[未コミット]
+
+        Log1 --> Log2 --> Log3
+        Log1 --> Committed
+        Log2 --> Committed
+        Log3 --> Uncommitted
+    end
+
+    subgraph "Paxosの役割"
+        Proposer[Proposer<br/>値を提案]
+        Acceptor1[Acceptor 1<br/>提案を受け入れ]
+        Acceptor2[Acceptor 2<br/>提案を受け入れ]
+        Acceptor3[Acceptor 3<br/>提案を受け入れ]
+        Learner[Learner<br/>合意された値を学習]
+
+        Proposer -->|Prepare/Accept| Acceptor1
+        Proposer -->|Prepare/Accept| Acceptor2
+        Proposer -->|Prepare/Accept| Acceptor3
+        Acceptor1 -->|通知| Learner
+        Acceptor2 -->|通知| Learner
+        Acceptor3 -->|通知| Learner
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant Leader as Leader
+    participant F1 as Follower 1
+    participant F2 as Follower 2
+
+    Note over Client,F2: Raft: 通常のログレプリケーション
+
+    Client->>Leader: set x = 5
+    Leader->>Leader: ログエントリ作成<br/>(term: 3, index: 10, cmd: set x=5)
+
+    par ログレプリケーション
+        Leader->>F1: AppendEntries<br/>(term: 3, entries: [set x=5])
+        F1->>F1: ログに追加
+        F1-->>Leader: 成功(term: 3, index: 10)
+    and
+        Leader->>F2: AppendEntries<br/>(term: 3, entries: [set x=5])
+        F2->>F2: ログに追加
+        F2-->>Leader: 成功(term: 3, index: 10)
+    end
+
+    Leader->>Leader: 過半数のACK確認(2/2)
+    Leader->>Leader: コミット(index: 10)
+    Leader-->>Client: 成功
+
+    Leader->>F1: AppendEntries<br/>(leaderCommit: 10)
+    Leader->>F2: AppendEntries<br/>(leaderCommit: 10)
+    F1->>F1: コミット適用
+    F2->>F2: コミット適用
+
+    Note over Client,F2: Raft: リーダー選挙
+
+    F1->>F1: Leaderからのハートビート<br/>タイムアウト(150-300ms)
+    F1->>F1: Candidateに昇格<br/>term: 4
+
+    par 投票リクエスト
+        F1->>Leader: RequestVote(term: 4)
+        Leader-->>F1: 投票(term: 4)
+    and
+        F1->>F2: RequestVote(term: 4)
+        F2-->>F1: 投票(term: 4)
+    end
+
+    F1->>F1: 過半数の投票獲得(2/2)
+    F1->>F1: Leaderに昇格
+    F1->>Leader: AppendEntries(ハートビート)
+    F1->>F2: AppendEntries(ハートビート)
+```
+
+```mermaid
+sequenceDiagram
+    participant P as Proposer
+    participant A1 as Acceptor 1
+    participant A2 as Acceptor 2
+    participant A3 as Acceptor 3
+
+    Note over P,A3: Paxos: 2フェーズプロトコル
+
+    Note over P,A3: Phase 1: Prepare
+
+    P->>P: 提案番号生成: n=1
+
+    par Prepare送信
+        P->>A1: Prepare(n=1)
+        A1->>A1: n > promised_n(0)?<br/>promised_n = 1
+        A1-->>P: Promise(n=1, accepted: null)
+    and
+        P->>A2: Prepare(n=1)
+        A2->>A2: n > promised_n(0)?<br/>promised_n = 1
+        A2-->>P: Promise(n=1, accepted: null)
+    and
+        P->>A3: Prepare(n=1)
+        A3->>A3: n > promised_n(0)?<br/>promised_n = 1
+        A3-->>P: Promise(n=1, accepted: null)
+    end
+
+    P->>P: 過半数のPromise受信(3/3)
+
+    Note over P,A3: Phase 2: Accept
+
+    P->>P: 値決定: v="value_x"
+
+    par Accept送信
+        P->>A1: Accept(n=1, v="value_x")
+        A1->>A1: n >= promised_n(1)?<br/>accepted = (1, "value_x")
+        A1-->>P: Accepted(n=1)
+    and
+        P->>A2: Accept(n=1, v="value_x")
+        A2->>A2: n >= promised_n(1)?<br/>accepted = (1, "value_x")
+        A2-->>P: Accepted(n=1)
+    and
+        P->>A3: Accept(n=1, v="value_x")
+        A3->>A3: n >= promised_n(1)?<br/>accepted = (1, "value_x")
+        A3-->>P: Accepted(n=1)
+    end
+
+    P->>P: 過半数のAccepted受信<br/>合意完了: "value_x"
+```
+
+### 設計のポイント
+
+Raftは、Paxosより理解しやすく実装しやすいため、etcdやConsulなど多くのシステムで採用されています。
+Paxosは、より一般的で柔軟ですが、実装が複雑で、Multi-Paxosなどの拡張が必要です。
+両アルゴリズムとも、過半数(Quorum)のノードの合意が必要で、f台の障害に耐えるには2f+1台のノードが必要です。
+Raftでは、リーダー選挙のタイムアウトをランダム化することで、スプリットブレインを防ぎます。
+ログの圧縮(スナップショット)を定期的に行い、ログの肥大化を防ぎます。
+ネットワーク分断時は、過半数を持つパーティションのみが処理を継続できます。
 
 ## 分散システムでユニークIDを設計する
 

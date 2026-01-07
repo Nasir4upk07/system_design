@@ -647,3 +647,264 @@ Row Level Security(RLS)を使用して、データベースレベルでテナン
 テナントIDは、JWTに含め、すべてのクエリで必ずフィルタリングします。
 テナントごとのリソース使用量を監視して、公平なリソース配分を実現します(Rate Limiting等)。
 大口顧客には個別データベースを割り当て、小規模顧客は共有データベースを使用するハイブリッド方式も有効です。
+
+## マイクロサービスとモノリスの比較
+
+### 概要
+
+アプリケーションアーキテクチャとして、モノリス(一枚岩)とマイクロサービスの選択は重要な決定です。
+それぞれの特性とトレードオフを理解し、システムの規模やチーム構成に応じて選択します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "モノリスアーキテクチャ"
+        MonoClient[クライアント]
+        MonoApp[モノリスアプリケーション]
+        MonoUser[ユーザー機能]
+        MonoOrder[注文機能]
+        MonoPayment[決済機能]
+        MonoInventory[在庫機能]
+        MonoDB[(単一データベース)]
+
+        MonoClient --> MonoApp
+        MonoApp --> MonoUser
+        MonoApp --> MonoOrder
+        MonoApp --> MonoPayment
+        MonoApp --> MonoInventory
+        MonoUser --> MonoDB
+        MonoOrder --> MonoDB
+        MonoPayment --> MonoDB
+        MonoInventory --> MonoDB
+    end
+
+    subgraph "マイクロサービスアーキテクチャ"
+        MSClient[クライアント]
+        Gateway[API Gateway]
+        UserSvc[ユーザーサービス]
+        OrderSvc[注文サービス]
+        PaymentSvc[決済サービス]
+        InventorySvc[在庫サービス]
+        UserDB[(User DB)]
+        OrderDB[(Order DB)]
+        PaymentDB[(Payment DB)]
+        InventoryDB[(Inventory DB)]
+        MQ[メッセージキュー]
+
+        MSClient --> Gateway
+        Gateway --> UserSvc
+        Gateway --> OrderSvc
+        Gateway --> PaymentSvc
+        Gateway --> InventorySvc
+        UserSvc --> UserDB
+        OrderSvc --> OrderDB
+        PaymentSvc --> PaymentDB
+        InventorySvc --> InventoryDB
+        OrderSvc --> MQ
+        MQ --> PaymentSvc
+        MQ --> InventorySvc
+    end
+```
+
+```mermaid
+graph LR
+    subgraph "モノリスの特徴"
+        MonoPros["利点<br/>シンプルなデプロイ<br/>低レイテンシ - プロセス内呼び出し<br/>トランザクション管理容易<br/>デバッグ容易"]
+        MonoCons["欠点<br/>スケーリングの粒度が粗い<br/>技術スタックの制約<br/>チーム間の依存関係<br/>デプロイ影響範囲が大きい"]
+    end
+
+    subgraph "マイクロサービスの特徴"
+        MSPros["利点<br/>独立したスケーリング<br/>技術選択の自由度<br/>障害分離<br/>チームの自律性"]
+        MSCons["欠点<br/>分散システムの複雑性<br/>ネットワークレイテンシ<br/>データ整合性の課題<br/>運用コスト増加"]
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant Mono as モノリス
+    participant Gateway as API Gateway
+    participant Order as 注文サービス
+    participant Payment as 決済サービス
+    participant Inventory as 在庫サービス
+
+    Note over Client,Inventory: モノリスでの注文処理
+
+    Client->>Mono: 注文リクエスト
+    Mono->>Mono: BEGIN TRANSACTION
+    Mono->>Mono: 在庫確認(プロセス内呼び出し)
+    Mono->>Mono: 決済処理(プロセス内呼び出し)
+    Mono->>Mono: 注文作成(プロセス内呼び出し)
+    Mono->>Mono: COMMIT
+    Mono-->>Client: 注文完了
+
+    Note over Client,Inventory: マイクロサービスでの注文処理
+
+    Client->>Gateway: 注文リクエスト
+    Gateway->>Order: 注文作成
+    Order->>Inventory: 在庫確認(HTTP/gRPC)
+    Inventory-->>Order: 在庫あり
+    Order->>Payment: 決済処理(HTTP/gRPC)
+    Payment-->>Order: 決済成功
+    Order->>Order: 注文保存
+    Order->>Order: イベント発行(OrderCreated)
+    Order-->>Gateway: 注文ID返却
+    Gateway-->>Client: 注文完了
+
+    Note over Order,Inventory: 非同期処理(Saga)
+    Order->>Inventory: 在庫引当イベント
+    Order->>Payment: 決済確定イベント
+```
+
+### 設計のポイント
+
+モノリスは、小規模なチームや初期段階のプロダクトに適しています。
+マイクロサービスは、大規模なチームや複雑なドメインを持つシステムに適しています。
+モノリスからマイクロサービスへの移行は、Strangler Figパターンで段階的に行います。
+マイクロサービスでは、サービス間通信、データ整合性、分散トレーシングなどの課題を考慮する必要があります。
+モジュラーモノリスは、モノリスの利点を維持しながら、将来の分割に備えた設計です。
+「マイクロサービスプレミアム」を払う準備ができていない場合は、モノリスから始めることを推奨します。
+
+## セキュリティ設計(暗号化、TLS/SSL)
+
+### 概要
+
+システムのセキュリティを確保するため、データの暗号化、通信の保護、セキュリティ対策を適切に設計します。
+TLS/SSL、暗号化アルゴリズム、OWASP Top 10対策などを理解し、実装します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "通信の暗号化"
+        Client[クライアント]
+        LB[ロードバランサー<br/>TLS終端]
+        App[アプリケーション]
+        DB[(データベース)]
+
+        Client -->|HTTPS<br/>TLS 1.3| LB
+        LB -->|HTTP or TLS| App
+        App -->|TLS| DB
+    end
+
+    subgraph "データ暗号化"
+        AtRest[保存時暗号化<br/>Encryption at Rest]
+        InTransit[転送時暗号化<br/>Encryption in Transit]
+        AppLevel[アプリケーション暗号化<br/>End-to-End Encryption]
+    end
+
+    subgraph "暗号化アルゴリズム"
+        Symmetric[対称鍵暗号<br/>AES-256-GCM]
+        Asymmetric[非対称鍵暗号<br/>RSA-2048, ECDSA]
+        Hash[ハッシュ関数<br/>SHA-256, bcrypt]
+        KDF[鍵導出関数<br/>PBKDF2, Argon2]
+    end
+
+    subgraph "鍵管理"
+        KMS[KMS<br/>AWS KMS/HashiCorp Vault]
+        Rotation[鍵ローテーション]
+        HSM[HSM<br/>ハードウェアセキュリティモジュール]
+    end
+```
+
+```mermaid
+graph LR
+    subgraph "TLSハンドシェイク"
+        ClientHello[1. Client Hello<br/>対応暗号スイート提示]
+        ServerHello[2. Server Hello<br/>暗号スイート選択<br/>証明書送信]
+        KeyExchange[3. Key Exchange<br/>プリマスターシークレット]
+        Finished[4. Finished<br/>セッション確立]
+
+        ClientHello --> ServerHello
+        ServerHello --> KeyExchange
+        KeyExchange --> Finished
+    end
+
+    subgraph "証明書チェーン"
+        Root[ルートCA証明書]
+        Intermediate[中間CA証明書]
+        Server[サーバー証明書]
+
+        Root --> Intermediate
+        Intermediate --> Server
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant LB as ロードバランサー
+    participant App as アプリケーション
+    participant KMS as KMS
+    participant DB as データベース
+
+    Note over Client,DB: TLS接続確立
+
+    Client->>LB: Client Hello<br/>(TLS 1.3, 暗号スイート)
+    LB->>Client: Server Hello<br/>(証明書, 公開鍵)
+    Client->>Client: 証明書検証<br/>(CA署名確認)
+    Client->>LB: Key Exchange<br/>(プリマスターシークレット)
+    LB->>LB: セッションキー生成
+    Client->>LB: Finished(暗号化)
+    LB->>Client: Finished(暗号化)
+
+    Note over Client,DB: 機密データの暗号化
+
+    Client->>LB: POST /api/users<br/>{"ssn": "123-45-6789"}
+    LB->>App: リクエスト転送
+
+    App->>KMS: GenerateDataKey<br/>(CMK-ID)
+    KMS-->>App: {<br/>plaintext_key: "...",<br/>encrypted_key: "..."<br/>}
+
+    App->>App: データ暗号化<br/>AES-256-GCM(ssn, plaintext_key)
+
+    App->>DB: INSERT INTO users<br/>(encrypted_ssn, encrypted_key)
+
+    Note over Client,DB: 機密データの復号
+
+    App->>DB: SELECT encrypted_ssn, encrypted_key<br/>FROM users
+    DB-->>App: 暗号化データ
+
+    App->>KMS: Decrypt(encrypted_key)
+    KMS-->>App: plaintext_key
+
+    App->>App: データ復号<br/>AES-256-GCM-Decrypt
+
+    App-->>Client: {"ssn": "***-**-6789"}<br/>(マスキング)
+```
+
+```mermaid
+graph TB
+    subgraph "OWASP Top 10対策"
+        Injection[1. インジェクション<br/>SQLi, XSS対策<br/>パラメータ化クエリ<br/>入力サニタイズ]
+
+        BrokenAuth[2. 認証の不備<br/>MFA導入<br/>セッション管理<br/>パスワードポリシー]
+
+        SensitiveData[3. 機密データ露出<br/>暗号化<br/>TLS必須<br/>最小権限]
+
+        XXE[4. XXE<br/>XML外部エンティティ無効化]
+
+        BrokenAccess[5. アクセス制御の不備<br/>RBAC/ABAC<br/>認可チェック]
+
+        Misconfig[6. セキュリティ設定ミス<br/>デフォルト設定変更<br/>不要機能無効化]
+
+        XSS[7. XSS<br/>出力エスケープ<br/>CSP設定]
+
+        Deserialization[8. 安全でないデシリアライズ<br/>入力検証<br/>署名付きデータ]
+
+        Components[9. 脆弱なコンポーネント<br/>依存関係監査<br/>定期更新]
+
+        Logging[10. ログ・監視不足<br/>セキュリティログ<br/>異常検知]
+    end
+```
+
+### 設計のポイント
+
+TLS 1.3を使用し、TLS 1.0/1.1は無効化します。
+証明書は信頼できるCAから取得し、自己署名証明書は本番環境で使用しません。
+機密データ(PII、クレジットカード番号等)は、保存時も暗号化(Encryption at Rest)します。
+暗号鍵は、KMS(Key Management Service)で一元管理し、定期的にローテーションします。
+パスワードは、bcryptやArgon2でハッシュ化して保存し、平文で保存しません。
+SQLインジェクション対策として、パラメータ化クエリを使用し、ユーザー入力を直接SQLに含めません。
+CSP(Content Security Policy)ヘッダーを設定して、XSS攻撃を軽減します。

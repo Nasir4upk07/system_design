@@ -737,3 +737,146 @@ Sliding Window Logアルゴリズムは、より正確なレート制限を実�
 レート制限の設定は、APIの種類(読み取り/書き込み)やユーザーのティア(無料/有料)に応じて変更します。
 429レスポンスには、Retry-Afterヘッダーを含めて、クライアントに再試行タイミングを伝えます。
 分散環境では、Redisなどの共有ストレージを使用してカウンターを管理します。
+
+## 監視とオブザーバビリティ(Prometheus, Grafana)
+
+### 概要
+
+システムの可用性を維持するため、メトリクス、ログ、トレースを収集・分析して、問題を早期に検知します。
+Prometheus、Grafana、Jaegerなどのツールを組み合わせて、包括的な監視基盤を構築します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "アプリケーション層"
+        App1[アプリ1<br/>/metrics]
+        App2[アプリ2<br/>/metrics]
+        App3[アプリ3<br/>/metrics]
+    end
+
+    subgraph "メトリクス収集"
+        Prometheus[Prometheus<br/>時系列DB]
+        Exporter1[Node Exporter<br/>システムメトリクス]
+        Exporter2[Blackbox Exporter<br/>外形監視]
+        AlertManager[AlertManager<br/>アラート管理]
+
+        Prometheus -->|scrape| App1
+        Prometheus -->|scrape| App2
+        Prometheus -->|scrape| App3
+        Prometheus -->|scrape| Exporter1
+        Prometheus -->|scrape| Exporter2
+        Prometheus -->|alerts| AlertManager
+    end
+
+    subgraph "ログ収集"
+        Fluentd[Fluentd/Fluent Bit<br/>ログ収集]
+        Elasticsearch[(Elasticsearch<br/>ログストレージ)]
+        Kibana[Kibana<br/>ログ可視化]
+
+        App1 -->|logs| Fluentd
+        App2 -->|logs| Fluentd
+        App3 -->|logs| Fluentd
+        Fluentd --> Elasticsearch
+        Elasticsearch --> Kibana
+    end
+
+    subgraph "分散トレーシング"
+        Jaeger[Jaeger/Zipkin<br/>トレース収集]
+        TraceStore[(トレースストレージ)]
+
+        App1 -->|traces| Jaeger
+        App2 -->|traces| Jaeger
+        App3 -->|traces| Jaeger
+        Jaeger --> TraceStore
+    end
+
+    subgraph "可視化・アラート"
+        Grafana[Grafana<br/>統合ダッシュボード]
+        Slack[Slack]
+        PagerDuty[PagerDuty]
+
+        Prometheus --> Grafana
+        Elasticsearch --> Grafana
+        Jaeger --> Grafana
+        AlertManager --> Slack
+        AlertManager --> PagerDuty
+    end
+```
+
+```mermaid
+graph LR
+    subgraph "メトリクスの種類"
+        Counter[Counter<br/>累積値<br/>例: リクエスト数]
+        Gauge[Gauge<br/>現在値<br/>例: メモリ使用量]
+        Histogram[Histogram<br/>分布<br/>例: レイテンシ]
+        Summary[Summary<br/>パーセンタイル<br/>例: P99レイテンシ]
+    end
+
+    subgraph "4つのゴールデンシグナル"
+        Latency[Latency<br/>応答時間]
+        Traffic[Traffic<br/>リクエスト数]
+        Errors[Errors<br/>エラー率]
+        Saturation[Saturation<br/>リソース使用率]
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Prom as Prometheus
+    participant Alert as AlertManager
+    participant Grafana as Grafana
+    participant OnCall as オンコール担当者
+
+    Note over App,OnCall: 通常の監視フロー
+
+    loop 15秒ごと
+        Prom->>App: GET /metrics
+        App-->>Prom: http_requests_total{status="200"} 1000<br/>http_requests_total{status="500"} 5<br/>http_request_duration_seconds{quantile="0.99"} 0.5
+        Prom->>Prom: メトリクス保存(時系列DB)
+    end
+
+    Grafana->>Prom: PromQL: rate(http_requests_total[5m])
+    Prom-->>Grafana: 時系列データ
+    Grafana->>Grafana: グラフ描画
+
+    Note over App,OnCall: 障害検知とアラート
+
+    App->>Prom: エラー率上昇<br/>http_requests_total{status="500"} 100
+
+    Prom->>Prom: アラートルール評価<br/>rate(http_requests_total{status="500"}[5m])<br/>> 0.05
+
+    Prom->>Alert: アラート発火<br/>ErrorRateHigh: 10%
+
+    Alert->>Alert: グルーピング<br/>抑制ルール適用
+
+    Alert->>OnCall: Slack通知<br/>PagerDuty呼び出し
+
+    OnCall->>Grafana: ダッシュボード確認
+    Grafana->>Prom: 関連メトリクス取得
+    Prom-->>Grafana: CPU、メモリ、ディスク使用率
+
+    OnCall->>OnCall: 原因調査・対応
+
+    Note over App,OnCall: 分散トレーシング
+
+    App->>App: リクエスト受信<br/>trace_id: abc123
+
+    App->>Prom: メトリクス記録<br/>レイテンシ: 500ms
+
+    OnCall->>Grafana: 遅いリクエストを調査
+    Grafana->>Jaeger: trace_id: abc123
+    Jaeger-->>Grafana: スパン一覧<br/>API: 50ms<br/>DB: 400ms<br/>外部API: 50ms
+
+    OnCall->>OnCall: DBクエリが遅い原因を特定
+```
+
+### 設計のポイント
+
+Prometheusは、Pull型でメトリクスを収集し、PromQLで柔軟なクエリが可能です。
+4つのゴールデンシグナル(Latency、Traffic、Errors、Saturation)を監視することで、システムの健全性を把握します。
+アラートは、症状ベース(エラー率が高い)で設定し、原因ベース(CPU使用率が高い)は避けます。
+アラート疲れを防ぐため、適切な閾値設定と抑制ルールを設定します。
+分散トレーシングにより、マイクロサービス間のリクエストフローを可視化し、ボトルネックを特定します。
+SLI(Service Level Indicator)とSLO(Service Level Objective)を定義して、可用性の目標を明確にします。

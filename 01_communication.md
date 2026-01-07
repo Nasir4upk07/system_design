@@ -187,6 +187,114 @@ graph TB
 Circuit Breakerパターンを実装して、障害の連鎖を防ぎます。
 タイムアウト値とリトライポリシーを適切に設定します。
 
+## REST vs gRPC vs GraphQL
+
+### 概要
+
+API設計において、REST、gRPC、GraphQLは主要な選択肢です。
+それぞれの特性を理解し、ユースケースに応じて選択します。
+
+### システム設計図
+
+```mermaid
+graph TB
+    subgraph "REST API"
+        RESTClient[クライアント]
+        RESTEndpoint1[GET /users/123]
+        RESTEndpoint2[POST /users]
+        RESTEndpoint3[GET /users/123/orders]
+
+        RESTClient -->|HTTP/1.1 or HTTP/2| RESTEndpoint1
+        RESTClient -->|JSON| RESTEndpoint2
+        RESTClient -->|複数リクエスト必要| RESTEndpoint3
+    end
+
+    subgraph "gRPC"
+        gRPCClient[クライアント]
+        gRPCService[UserService.GetUser]
+        gRPCStream[OrderService.StreamOrders]
+
+        gRPCClient -->|HTTP/2| gRPCService
+        gRPCClient -->|Protocol Buffers| gRPCService
+        gRPCClient -->|双方向ストリーミング| gRPCStream
+    end
+
+    subgraph "GraphQL"
+        GQLClient[クライアント]
+        GQLEndpoint[POST /graphql]
+        GQLResolver1[User Resolver]
+        GQLResolver2[Order Resolver]
+
+        GQLClient -->|単一エンドポイント| GQLEndpoint
+        GQLEndpoint --> GQLResolver1
+        GQLEndpoint --> GQLResolver2
+    end
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant REST as REST API
+    participant gRPC as gRPCサービス
+    participant GraphQL as GraphQL API
+    participant DB as データベース
+
+    Note over Client,DB: REST: Over-fetching/Under-fetching問題
+
+    Client->>REST: GET /users/123
+    REST->>DB: SELECT * FROM users
+    DB-->>REST: 全カラム取得
+    REST-->>Client: {id, name, email, address, ...}<br/>(不要なデータも含む)
+
+    Client->>REST: GET /users/123/orders
+    REST->>DB: SELECT * FROM orders
+    DB-->>REST: 注文データ
+    REST-->>Client: {orders: [...]}<br/>(2回目のリクエスト)
+
+    Note over Client,DB: gRPC: 高速なバイナリ通信
+
+    Client->>gRPC: GetUser(user_id: 123)<br/>Protocol Buffers
+    gRPC->>DB: クエリ実行
+    DB-->>gRPC: ユーザーデータ
+    gRPC-->>Client: UserResponse(バイナリ)<br/>シリアライズ高速
+
+    Note over Client,DB: GraphQL: 必要なデータのみ取得
+
+    Client->>GraphQL: query {<br/>  user(id: 123) {<br/>    name<br/>    orders { id, amount }<br/>  }<br/>}
+    GraphQL->>DB: 必要なフィールドのみ取得
+    DB-->>GraphQL: ユーザー + 注文データ
+    GraphQL-->>Client: {user: {name, orders}}<br/>(1回のリクエストで完結)
+```
+
+```mermaid
+graph LR
+    subgraph "比較表"
+        REST_Pros["REST<br/>シンプル、キャッシュ容易<br/>広く普及、ツール豊富"]
+        REST_Cons["REST<br/>Over/Under-fetching<br/>複数リクエスト必要な場合あり"]
+
+        gRPC_Pros["gRPC<br/>高速 - バイナリ<br/>型安全、コード生成<br/>ストリーミング対応"]
+        gRPC_Cons["gRPC<br/>ブラウザ直接利用不可<br/>デバッグ困難"]
+
+        GraphQL_Pros["GraphQL<br/>必要なデータのみ取得<br/>単一エンドポイント<br/>型システム"]
+        GraphQL_Cons["GraphQL<br/>キャッシュ複雑<br/>N+1問題<br/>学習コスト"]
+    end
+
+    subgraph "ユースケース"
+        RESTCase["REST: 公開API<br/>シンプルなCRUD"]
+        gRPCCase["gRPC: マイクロサービス間<br/>低レイテンシ要求"]
+        GraphQLCase["GraphQL: モバイルアプリ<br/>複雑なデータ要求"]
+    end
+```
+
+### 設計のポイント
+
+RESTは、HTTPの標準的なメソッドとステータスコードを使用し、リソース指向の設計に適しています。
+gRPCは、Protocol Buffersによるスキーマ定義とコード生成により、マイクロサービス間の高速通信に適しています。
+GraphQLは、クライアントが必要なデータを正確に指定でき、モバイルアプリなど帯域幅が制限される環境に適しています。
+gRPCはブラウザから直接利用できないため、grpc-webまたはAPI Gatewayで変換が必要です。
+GraphQLのN+1問題はDataLoaderパターンで解決します。
+公開APIにはREST、内部通信にはgRPC、複雑なクエリ要求にはGraphQLという組み合わせが一般的です。
+
 ## Pub/Subで複数のサービスにメッセージ配信
 
 ### 概要
